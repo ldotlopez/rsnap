@@ -13,6 +13,17 @@ class ProfilesTest(unittest.TestCase):
         g = cls(basedir='/tmp/foo', now=self.now)
         return list(g.backcounter())
 
+    def test_subdaily(self):
+        ids = self.get_ids(rsnap.SubdailyProfile)
+
+        self.assertEqual(
+            len(ids),
+            24*12)
+
+        self.assertEqual(
+            ids[:2] + ids[-2:],
+            ['18.45.00', '18.40.00', '18.55.00', '18.50.00'])
+
     def test_monthly(self):
         ids = self.get_ids(rsnap.MonthlyProfile)
         self.assertEqual(
@@ -32,19 +43,23 @@ class ProfilesTest(unittest.TestCase):
             ids[:2] + ids[-2:],
             ['47', '46', '48', '47'])
 
-    def test_subdaily(self):
-        ids = self.get_ids(rsnap.SubdailyProfile)
+    def test_monthday(self):
+        ids = self.get_ids(rsnap.MonthdayProfile)
 
         self.assertEqual(
             len(ids),
-            24*12)
+            31)
 
         self.assertEqual(
-            ids[:2] + ids[-2:],
-            ['18.45.00', '18.40.00', '18.55.00', '18.50.00'])
+            ids[0:3],
+            [21, 22, 23])
 
-    def test_workday(self):
-        ids = self.get_ids(rsnap.WorkdayProfile)
+        self.assertEqual(
+            ids[-3:],
+            [18, 19, 20])
+
+    def test_weekday(self):
+        ids = self.get_ids(rsnap.WeekdayProfile)
 
         self.assertEqual(
             len(ids),

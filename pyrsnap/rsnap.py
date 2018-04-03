@@ -78,41 +78,10 @@ class CyclicProfile(StorageProfile):
         raise StopIteration()
 
 
-class MonthlyProfile(CyclicProfile):
-    NAME = 'monthly'
-
-    def backcounter(self):
-        for m in range(self.now.month + 12, self.now.month, -1):
-            m = m % 12 or 12
-            yield '%02d' % m
-
-
-class WorkdayProfile(CyclicProfile):
-    NAME = 'workday'
-
-    def backcounter(self):
-        for wd in range(self.now.isoweekday() + 7, self.now.isoweekday(), -1):
-            wd = wd % 7 or 7
-            yield '%d' % wd
-
-
-class WeeklyProfile(CyclicProfile):
-    NAME = 'weekly'
-
-    def backcounter(self):
-        year = timedelta(days=367)
-        diff = timedelta(weeks=0)
-
-        while True:
-            week = (self.now - diff).isocalendar()[1]
-            yield '%02d' % week
-
-            diff = diff + timedelta(weeks=1)
-            if diff >= year:
-                break
-
-
 class SubdailyProfile(CyclicProfile):
+    """
+    288 copies by default (one each 5 minutes)
+    """
     NAME = 'subdaily'
 
     def __init__(self, *args, **kwargs):
@@ -136,12 +105,75 @@ class SubdailyProfile(CyclicProfile):
                 break
 
 
+class MonthlyProfile(CyclicProfile):
+    """
+    12 copies
+    """
+    NAME = 'monthly'
+
+    def backcounter(self):
+        for m in range(self.now.month + 12, self.now.month, -1):
+            m = m % 12 or 12
+            yield '%02d' % m
+
+
+class WeeklyProfile(CyclicProfile):
+    """
+    52 copies (or 53...)
+    """
+    NAME = 'weekly'
+
+    def backcounter(self):
+        year = timedelta(days=367)
+        diff = timedelta(weeks=0)
+
+        while True:
+            week = (self.now - diff).isocalendar()[1]
+            yield '%02d' % week
+
+            diff = diff + timedelta(weeks=1)
+            if diff >= year:
+                break
+
+
 class HourlyProfile(SubdailyProfile):
+    """
+    24 copies
+    """
     NAME = 'hourly'
 
     def __init__(self, *args, **kwargs):
         kwargs['interval'] = 60*60
         super(HourlyProfile, self).__init__(*args, **kwargs)
+
+
+class MonthdayProfile(CyclicProfile):
+    """
+    30-31 copies
+    """
+    NAME = 'monthday'
+
+    def backcounter(self):
+        if self.now.month == 1:
+            prev = self.now.replace(year=self.now.year - 1, month=12)
+        else:
+            prev = self.now.replace(month=self.now.month - 1)
+
+        while self.now > prev:
+            prev = prev + timedelta(days=1)
+            yield prev.day
+
+
+class WeekdayProfile(CyclicProfile):
+    """
+    7 copies
+    """
+    NAME = 'weekday'
+
+    def backcounter(self):
+        for wd in range(self.now.isoweekday() + 7, self.now.isoweekday(), -1):
+            wd = wd % 7 or 7
+            yield '%d' % wd
 
 
 class ArgumentSet(dict):
@@ -268,7 +300,7 @@ class RSnap(object):
             pass
 
         res = subprocess.call(cmd)
-        if res != 0:
+        if res not in (0, 23):
             raise ExecutionError(res)
 
         latest = os.path.dirname(os.path.realpath(dest)) + "/latest"
@@ -353,3 +385,4 @@ if __name__ == '__main__':
     config = '\n'.join([x.strip() for x in config.strip().split('\n')])
 
     main()
+

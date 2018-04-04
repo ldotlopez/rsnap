@@ -3,6 +3,8 @@
 from __future__ import print_function
 
 import argparse
+import collections
+import ConfigParser
 import os
 import subprocess
 import sys
@@ -220,7 +222,6 @@ class ArgumentSet(dict):
 
 
 class RSnap(object):
-    STORAGE_PATTERN = r'%(storage)s/%(profile)s/%(id)s'
     RSYNC_BIN = '/usr/bin/rsync'
     RSYNC_OPTS = {
         'acls': True,
@@ -268,7 +269,8 @@ class RSnap(object):
             })
 
         if not is_class:
-            profile_cls = StorageProfile.get_subclass(profile) or StorageProfile
+            profile_cls = (StorageProfile.get_subclass(profile)
+                           or StorageProfile)
             profile = profile_cls(basedir=storage)
 
         cmd = self._get_base_command_line(rsync_opts)
@@ -299,9 +301,11 @@ class RSnap(object):
         except OSError:
             pass
 
-        res = subprocess.call(cmd)
-        if res not in (0, 23):
-            raise ExecutionError(res)
+        try:
+            res = subprocess.check_output(cmd)
+        except subprocess.CalledProcessError as e:
+            if e.returncode not in (23,):  # whitelisted codes
+                raise ExecutionError(returncode=e.returncode, output=e.output)
 
         latest = os.path.dirname(os.path.realpath(dest)) + "/latest"
         try:
@@ -310,79 +314,104 @@ class RSnap(object):
             pass
 
         try:
-            os.symlink(dest, latest)
+            # Basenaming link source provides better isolation of backup
+            os.symlink(os.path.basename(dest), latest)
         except OSError as e:
             print("Unable to link '%s' to '%s': %s" % (dest, latest, repr(e)))
 
 
-def parse_args(args):
+def build_argparser():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '--auto',
-        action='store_true',
-        default=False)
-    parser.add_argument(
-        '--rsync-bin',
-        required=False)
+
     parser.add_argument(
         '-c', '--config',
         required=False)
     parser.add_argument(
-        '--storage',
-        required=True),
-    parser.add_argument(
-        '--profile',
-        default=None,
+        '--rsync-bin',
         required=False)
     parser.add_argument(
+        '--storage',
+        required=False),
+    parser.add_argument(
+        '--profile',
+        required=False)
+    parser.add_argument(
+        nargs='?',
         dest='source')
 
-    arguments = parser.parse_args(args)
-    return vars(arguments)
+    return parser
 
 
-def load_config(filepath):
-    return {}
+def operations_from_config(fp):
+    parser = ConfigParser.SafeConfigParser()
+    parser.readfp(fp)
+
+    return [
+        (sect, {
+            'source': parser.get(sect, 'source'),
+            'storage': parser.get(sect, 'storage'),
+            'profile': parser.get(sect, 'profile'),
+        })
+        for sect in parser.sections()]
+
+
+def operations_from_args(args):
+    return [('Command Line', {
+        'storage': args['storage'],
+        'source': args['source'],
+        'profile': args['profile']
+    })]
 
 
 def main():
-    opts = parse_args(sys.argv[1:])
+    parser = build_argparser()
+    args = vars(parser.parse_args(sys.argv[1:]))
 
-    if opts['auto']:
+    # Check arguments
+    if not args['config']:
+        manual_reqs = ('profile', 'storage', 'source')
+        for arg in manual_reqs:
+            if not args.get(arg):
+                parser.print_usage()
+                errmsg = "'%(arg)s' is required without config"
+                errmsg = errmsg % {'arg': arg}
+                print(errmsg, file=sys.stderr)
+                sys.exit(1)
+
+    # Build operations
+    if args['config']:
+        with open(args['config']) as fp:
+            operations = operations_from_config(fp)
+
+    else:
+        operations = operations_from_args(args)
+
+    # Run operations
+    for (name, items) in operations:
         try:
-            config_opts = load_config(opts['config'])
-        except Exception as e:
-            print(repr(e))
-            return
+            RSnap().build(
+                profile=items['profile'],
+                storage=items['storage'],
+                source=items['source'],
+                rsync_opts={
+                    'acls': False,
+                    'progress': False,
+                    'verbose': False
+                }
+            )
 
+        except ExecutionError as e:
+            errmsg = "Backup of %(src)s failed: %(code)s"
+            errmsg = errmsg % {'src': src, 'code': e.returncode}
+            print(errmsg, file=sys.stderr)
 
-    RSnap(
-        rsync_bin=opts.get('rsync_bin'),
-    ).run(
-        profile=opts.get('profile'),
-        storage=opts['storage'],
-        source=opts['source'],
-        rsync_opts={
-            'acls': False,
-            'progress': False,
-            'verbose': True
-        }
-    )
+            for line in e.output.split('\n'):
+                print("\t" + line)
+
+            continue
+
+        print("Backup of %(src)s: OK" % {'src': items['source']})
 
 
 if __name__ == '__main__':
-    config = """
-    [global]
-    rsync-bin: /opt/brew/bin/rsync
-    rsync-opt-verbose: False
-    storage: /Users/luis/Backups/
-
-    [alice daily]
-    storage-pattern: %(storage)s/alice-daily-%(id)s'
-    profile: daily
-    source: root@alice.centinet:/
-    """
-    config = '\n'.join([x.strip() for x in config.strip().split('\n')])
-
     main()
-

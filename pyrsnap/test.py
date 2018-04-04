@@ -1,13 +1,18 @@
 import unittest
+import StringIO
 from datetime import datetime
-
 
 import rsnap
 
 
+def clean_config(s):
+    return '\n'.join([x.strip() for x in s.strip().split('\n')])
+
+
 class ProfilesTest(unittest.TestCase):
     def setUp(self):
-        self.now = datetime(year=2017, month=11, day=20, hour=18, minute=49, second=12)
+        self.now = datetime(year=2017, month=11, day=20,
+                            hour=18, minute=49, second=12)
 
     def get_ids(self, cls):
         g = cls(basedir='/tmp/foo', now=self.now)
@@ -28,7 +33,8 @@ class ProfilesTest(unittest.TestCase):
         ids = self.get_ids(rsnap.MonthlyProfile)
         self.assertEqual(
             ids,
-            ['11', '10', '09', '08', '07', '06', '05', '04', '03', '02', '01', '12']
+            ['11', '10', '09', '08', '07', '06', '05', '04', '03', '02', '01',
+             '12']
         )
 
     def test_weekly(self):

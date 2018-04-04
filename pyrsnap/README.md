@@ -27,10 +27,10 @@ profile = weekday
 
 [host-a]
 storage = %(storage-root)s/host-a
-source: root@host-a:/
+source = root@host-a:/
 
 [host-b]
 profile = hourly
 storage = /another-location
-source: root@host-b:/
+source = root@host-b:/
 ```

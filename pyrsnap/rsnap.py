@@ -315,19 +315,19 @@ class RSnap(object):
 
         try:
             # Basenaming link source provides better isolation of backup
-            os.symlink(os.path.basename(dest), latest)
+            os.symlink(os.path.basename(dest.rstrip('/')), latest)
         except OSError as e:
             print("Unable to link '%s' to '%s': %s" % (dest, latest, repr(e)))
 
 
 def build_argparser():
     parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        '-c', '--config',
-        required=False)
     parser.add_argument(
         '--rsync-bin',
+        default='/usr/bin/rsync',
+        required=False)
+    parser.add_argument(
+        '-c', '--config',
         required=False)
     parser.add_argument(
         '--storage',

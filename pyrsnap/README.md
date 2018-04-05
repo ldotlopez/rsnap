@@ -34,3 +34,12 @@ profile = hourly
 storage = /another-location
 source = root@host-b:/
 ```
+
+Rotation profiles
+---
+
+  - hourly: 24 copies, one per hour (00.00.00, 01.00.00, …, 23.00.00)
+  - weekday: 7 copies, from Monday to Sunday (1, 2, …, 6, 7)
+  - weekly: 52-53 copies, one per week (01, 02, …, 51, 52)
+  - monthday: 30-31 copies, from the first day of the month to the last (01, 02, …, 30, 31)
+  - monthly: 12 copies, from January to December (01, 02, …, 11, 12)

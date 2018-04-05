@@ -389,7 +389,9 @@ def main():
     # Run operations
     for (name, items) in operations:
         try:
-            RSnap().build(
+            RSnap(
+                rsync_bin=args['rsync_bin']
+            ).run(
                 profile=items['profile'],
                 storage=items['storage'],
                 source=items['source'],
@@ -410,7 +412,7 @@ def main():
 
             continue
 
-        print("Backup of %(src)s: OK" % {'src': items['source']})
+        print("Backup of %(name)s: OK" % {'name': name})
 
 
 if __name__ == '__main__':

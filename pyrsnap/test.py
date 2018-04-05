@@ -58,11 +58,11 @@ class ProfilesTest(unittest.TestCase):
 
         self.assertEqual(
             ids[0:3],
-            [21, 22, 23])
+            ['21', '22', '23'])
 
         self.assertEqual(
             ids[-3:],
-            [18, 19, 20])
+            ['18', '19', '20'])
 
     def test_weekday(self):
         ids = self.get_ids(rsnap.WeekdayProfile)

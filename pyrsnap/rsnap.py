@@ -163,7 +163,7 @@ class MonthdayProfile(CyclicProfile):
 
         while self.now > prev:
             prev = prev + timedelta(days=1)
-            yield prev.day
+            yield '%02d' % prev.day
 
 
 class WeekdayProfile(CyclicProfile):

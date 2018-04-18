@@ -1,5 +1,6 @@
 import unittest
 import StringIO
+import sys
 from datetime import datetime
 
 import rsnap
@@ -7,6 +8,21 @@ import rsnap
 
 def clean_config(s):
     return '\n'.join([x.strip() for x in s.strip().split('\n')])
+
+
+class SequenceProfile(rsnap.CyclicProfile):
+    NAME = 'sequence'
+
+    def __init__(self, seq=None, *args, **kwargs):
+        if seq is None:
+            seq = range(9, -1, -1)
+
+        self.seq = seq
+        super(SequenceProfile, self).__init__(*args, **kwargs)
+
+    def backcounter(self):
+        for x in self.seq:
+            yield str(x)
 
 
 class ProfilesTest(unittest.TestCase):
@@ -74,6 +90,32 @@ class ProfilesTest(unittest.TestCase):
         self.assertEqual(
             ids,
             ['1', '7', '6', '5', '4', '3', '2'])
+
+
+class RSnapTest(unittest.TestCase):
+    def test_simple(self):
+        rs = rsnap.RSnap('/foo', storage='/storage', profile='sequence')
+        (rsync, src, dst), kwargs = rs.build()
+
+        self.assertEqual(kwargs.get('link-dest'), None)
+
+        self.assertEqual(src, '/foo')
+        self.assertEqual(dst, '/storage/sequence/9')
+
+    def test_previous(self):
+        rs = rsnap.RSnap('/foo', storage='/storage', profile='sequence')
+
+    def test_rsync_path_and_opts(self):
+        rs = rsnap.RSnap('/foo', storage='/storage', profile='sequence',
+                         rsync_bin='/opt/rsync', rsync_opts={
+                            'opt-bool': True,
+                            'opt-str': 'abc'
+                         })
+        (rsync, src, dst), kwargs = rs.build()
+
+        self.assertEqual(rsync, '/opt/rsync')
+        self.assertEqual(kwargs.get('opt-bool', None), True)
+        self.assertEqual(kwargs.get('opt-str', None), 'abc')
 
 
 if __name__ == '__main__':

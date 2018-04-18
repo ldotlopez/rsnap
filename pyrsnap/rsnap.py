@@ -13,6 +13,18 @@ from datetime import datetime, timedelta
 
 
 class ExecutionError(Exception):
+    def __init__(self, returncode, output):
+        self.returncode = returncode
+        self.output = output
+
+    def repr(self):
+        return "ExecutionError: (%(code)d, %(output)s" % {
+            'code': self.returncode,
+            'output': self.output
+        }
+
+
+class MissingPathError(Exception):
     pass
 
 
@@ -224,7 +236,7 @@ class ArgumentSet(dict):
 class RSnap(object):
     RSYNC_BIN = '/usr/bin/rsync'
     RSYNC_OPTS = {
-        'acls': True,
+        'acls': False,
         'archive': True,
         'delete': True,
         'fake-super': True,
@@ -240,7 +252,8 @@ class RSnap(object):
         'xattrs': True
     }
 
-    def __init__(self, rsync_bin=None, rsync_opts=None):
+    def __init__(self, source, storage, profile='default',
+                 rsync_bin=None, rsync_opts=None):
         if rsync_bin is None:
             rsync_bin = self.RSYNC_BIN
         if rsync_opts is None:
@@ -249,6 +262,21 @@ class RSnap(object):
         self.rsync_bin = rsync_bin
         self.rsync_opts = ArgumentSet(**rsync_opts)
 
+        self.source = source
+        self.storage = storage
+
+        try:
+            profile_is_class = issubclass(profile, StorageProfile)
+        except TypeError:
+            profile_is_class = False
+
+        if not profile_is_class:
+            profile_cls = (StorageProfile.get_subclass(profile)
+                           or StorageProfile)
+            self.profile = profile_cls(basedir=self.storage)
+        else:
+            self.profile = profile
+
     def _get_base_command_line(self, opts=None):
         argset = self.rsync_opts.copy()
         if opts:
@@ -256,7 +284,43 @@ class RSnap(object):
 
         return [self.rsync_bin] + argset.as_command_line()
 
-    def build(self, profile, storage, source, rsync_opts=None):
+    def _get_excludes(self):
+        excludes_file = self.storage + '/exclude.lst'
+        try:
+            fh = open(excludes_file, 'r')
+            fh.close()
+            return excludes_file
+
+        except IOError:
+            raise MissingPathError(excludes_file)
+
+    def _get_latest(self, destination):
+        return (
+            os.path.basename(destination.rstrip('/')),
+            os.path.dirname(os.path.realpath(destination)) + "/latest"
+        )
+
+    def build(self):
+        kwargs = ArgumentSet(**self.rsync_opts)
+
+        try:
+            # Not sure if one implies the other
+            kwargs['exclude-from'] = self._get_excludes()
+            kwargs['delete-excluded'] = True
+        except MissingPathError:
+            pass
+
+        # If link_dest is None its unset, it's OK
+        link_dest = self.profile.get_previous_storage()
+        kwargs['link-dest'] = link_dest
+
+        dest = self.profile.get_current_storage()
+        if self.source.endswith('/'):
+            dest += '/'
+
+        return (self.rsync_bin, self.source, dest), kwargs
+
+    def _old_build(self, profile, storage, source, rsync_opts=None):
         try:
             is_class = issubclass(profile, StorageProfile)
         except TypeError:
@@ -290,7 +354,48 @@ class RSnap(object):
 
         return cmd
 
-    def run(self, profile, storage, source, rsync_opts=None):
+    def run(self):
+        (cmd_bin, cmd_src, cmd_dst), cmd_kwargs = self.build()
+
+        # FIXME: Use a logger
+        cmd = (
+            [cmd_bin] +
+            cmd_kwargs.as_command_line() +
+            [cmd_src, cmd_dst]
+        )
+        cmd_str = ["'" + x + "'" for x in cmd]
+        cmd_str = ' '.join(cmd_str)
+        print(cmd_str)
+
+        # Try to create cmd_dst parents
+        try:
+            os.makedirs(cmd_dst)
+        except OSError:
+            pass
+
+        # Execute
+        try:
+            res = subprocess.check_output(cmd)
+        except subprocess.CalledProcessError as e:
+            if e.returncode not in (23,):  # whitelisted codes
+                raise ExecutionError(returncode=e.returncode, output=e.output)
+
+        # Update latest link
+        (latest_src, latest_dst) = self._get_latest(cmd_dst)
+        try:
+            os.unlink(latest_dst)
+        except OSError as e:
+            pass
+
+        try:
+            # Basenaming link source provides better isolation of backup
+            os.symlink(latest_src, latest_dst)
+        except OSError as e:
+            print("Unable to link '%s' to '%s': %s" % (
+                latest_src, latest_dst, repr(e))
+            )
+
+    def _old_run(self, profile, storage, source, rsync_opts=None):
         cmd = self.build(profile, storage, source, rsync_opts)
         print(' '.join(
             ['%s' % x for x in cmd]
@@ -387,24 +492,19 @@ def main():
         operations = operations_from_args(args)
 
     # Run operations
-    for (name, items) in operations:
+    for (name, item) in operations:
         try:
-            RSnap(
-                rsync_bin=args['rsync_bin']
-            ).run(
-                profile=items['profile'],
-                storage=items['storage'],
-                source=items['source'],
-                rsync_opts={
-                    'acls': False,
-                    'progress': False,
-                    'verbose': False
-                }
-            )
+            rsnap = RSnap(
+                source=item['source'],
+                storage=item['storage'],
+                profile=item['profile'],
+                rsync_bin=item.get('rsync_bin', None),
+                rsync_opts=item.get('rsync_opts', None))
+            rsnap.run()
 
         except ExecutionError as e:
             errmsg = "Backup of %(src)s failed: %(code)s"
-            errmsg = errmsg % {'src': src, 'code': e.returncode}
+            errmsg = errmsg % {'src': item['source'], 'code': e.returncode}
             print(errmsg, file=sys.stderr)
 
             for line in e.output.split('\n'):

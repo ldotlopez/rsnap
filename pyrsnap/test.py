@@ -62,23 +62,22 @@ class ProfilesTest(unittest.TestCase):
 
         # Yes, 47 is in both ends, weeks doesn't align perfectly with years
         self.assertEqual(
-            ids[:2] + ids[-2:],
-            ['47', '46', '48', '47'])
+            ids[:3] + ids[-3:],
+            ['47', '46', '45', '49', '48', '47'])
 
     def test_monthday(self):
         ids = self.get_ids(rsnap.MonthdayProfile)
-
         self.assertEqual(
             len(ids),
             31)
 
         self.assertEqual(
-            ids[0:3],
-            ['21', '22', '23'])
+            ids[:3],
+            ['20', '19', '18'])
 
         self.assertEqual(
             ids[-3:],
-            ['18', '19', '20'])
+            ['23', '22', '21'])
 
     def test_weekday(self):
         ids = self.get_ids(rsnap.WeekdayProfile)

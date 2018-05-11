@@ -173,9 +173,10 @@ class MonthdayProfile(CyclicProfile):
         else:
             prev = self.now.replace(month=self.now.month - 1)
 
-        while self.now > prev:
-            prev = prev + timedelta(days=1)
-            yield '%02d' % prev.day
+        counter = self.now
+        while counter > prev:
+            yield '%02d' % counter.day
+            counter = counter - timedelta(days=1)
 
 
 class WeekdayProfile(CyclicProfile):

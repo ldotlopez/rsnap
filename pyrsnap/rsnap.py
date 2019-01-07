@@ -263,13 +263,11 @@ class RSnap(object):
 
     def __init__(self, source, storage, profile='default',
                  rsync_bin=None, rsync_opts=None):
-        if rsync_bin is None:
-            rsync_bin = self.RSYNC_BIN
-        if rsync_opts is None:
-            rsync_opts = self.RSYNC_OPTS
+        self.rsync_bin = rsync_bin or self.RSYNC_BIN
 
-        self.rsync_bin = rsync_bin
-        self.rsync_opts = ArgumentSet(**rsync_opts)
+        self.rsync_opts = self.RSYNC_OPTS
+        self.rsync_opts.update(rsync_opts or {})
+        self.rsync_opts = ArgumentSet(**self.rsync_opts)
 
         self.source = source
         self.storage = storage
@@ -460,13 +458,35 @@ def operations_from_config(fp):
     parser = ConfigParser.SafeConfigParser()
     parser.readfp(fp)
 
-    return [
-        (sect, {
-            'source': parser.get(sect, 'source'),
-            'storage': parser.get(sect, 'storage'),
-            'profile': parser.get(sect, 'profile'),
-        })
-        for sect in parser.sections()]
+    ret = []
+    for sect in [sect for sect in parser.sections() if sect != 'DEFAULT']:
+        values = {x: parser.get(sect, x)
+                  for x in ('profile', 'source', 'storage')}
+
+        try:
+            values['rsync_bin'] = parser.get(sect, 'rsync-bin')
+        except ConfigParser.NoOptionError:
+            pass
+
+        values['rsync_opts'] = {
+            k[len('rsync-opt-'):]: v
+            for (k, v) in parser.items(sect)
+            if k.startswith('rsync-opt-')}
+
+        transformations = {
+            'True': True,
+            'False': False,
+            'None': None,
+            '': None
+        }
+        values['rsync_opts'] = {
+            (k, transformations.get(v, v))
+            for (k, v) in values['rsync_opts'].items()
+        }
+
+        ret.append((sect, values))
+
+    return ret
 
 
 def operations_from_args(args):
@@ -496,7 +516,6 @@ def main():
     if args['config']:
         with open(args['config']) as fp:
             operations = operations_from_config(fp)
-
     else:
         operations = operations_from_args(args)
 

@@ -37,6 +37,7 @@ source = root@host-b:/
 Rotation profiles
 ---
 
+  - snapshot: infite copies, one per execution (2019.01.07-13.29.12.000000 format, %Y.%m.%d-%H.%M.%S.%z)
   - hourly: 24 copies, one per hour (00.00.00, 01.00.00, …, 23.00.00)
   - weekday: 7 copies, from Monday to Sunday (1, 2, …, 6, 7)
   - weekly: 52-53 copies, one per week (01, 02, …, 51, 52)

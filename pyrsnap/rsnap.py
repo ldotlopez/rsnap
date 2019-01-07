@@ -327,40 +327,6 @@ class RSnap(object):
 
         return (self.rsync_bin, self.source, dest), kwargs
 
-    def _old_build(self, profile, storage, source, rsync_opts=None):
-        try:
-            is_class = issubclass(profile, StorageProfile)
-        except TypeError:
-            is_class = False
-
-        if os.path.exists(storage + '/exclude.lst'):
-            rsync_opts.update({
-                'exclude-from': storage + '/exclude.lst',
-                'delete-excluded': True
-            })
-
-        if not is_class:
-            profile_cls = (StorageProfile.get_subclass(profile)
-                           or StorageProfile)
-            profile = profile_cls(basedir=storage)
-
-        cmd = self._get_base_command_line(rsync_opts)
-        link_dest = profile.get_previous_storage()
-
-        if link_dest:
-            cmd.append('--link-dest=%s' % (link_dest,),)
-
-        dest = profile.get_current_storage()
-        if source.endswith('/'):
-            dest += '/'
-
-        cmd.extend([
-            '%s' % (source,),
-            '%s' % (dest,)
-        ])
-
-        return cmd
-
     def run(self):
         (cmd_bin, cmd_src, cmd_dst), cmd_kwargs = self.build()
 
@@ -401,35 +367,6 @@ class RSnap(object):
             print("Unable to link '%s' to '%s': %s" % (
                 latest_src, latest_dst, repr(e))
             )
-
-    def _old_run(self, profile, storage, source, rsync_opts=None):
-        cmd = self.build(profile, storage, source, rsync_opts)
-        print(' '.join(
-            ['%s' % x for x in cmd]
-        ))
-        dest = cmd[-1]
-        try:
-            os.makedirs(dest)
-        except OSError:
-            pass
-
-        try:
-            res = subprocess.check_output(cmd)
-        except subprocess.CalledProcessError as e:
-            if e.returncode not in (23,):  # whitelisted codes
-                raise ExecutionError(returncode=e.returncode, output=e.output)
-
-        latest = os.path.dirname(os.path.realpath(dest)) + "/latest"
-        try:
-            os.unlink(latest)
-        except OSError as e:
-            pass
-
-        try:
-            # Basenaming link source provides better isolation of backup
-            os.symlink(os.path.basename(dest.rstrip('/')), latest)
-        except OSError as e:
-            print("Unable to link '%s' to '%s': %s" % (dest, latest, repr(e)))
 
 
 def build_argparser():

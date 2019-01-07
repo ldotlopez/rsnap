@@ -29,8 +29,6 @@ class MissingPathError(Exception):
 
 
 class StorageProfile(object):
-    NAME = 'default'
-
     @classmethod
     def get_subclasses(cls):
         for subclass in cls.__subclasses__():
@@ -42,7 +40,7 @@ class StorageProfile(object):
     @classmethod
     def get_subclass(cls, name):
         for cls in cls.get_subclasses():
-            if cls.NAME == name:
+            if getattr(cls, 'NAME', None) == name:
                 return cls
 
         raise TypeError(name)
@@ -53,6 +51,16 @@ class StorageProfile(object):
     @property
     def basedir(self):
         return self._basedir + '/' + self.NAME
+
+    def get_current_storage(self):
+        raise NotImplementedError()
+
+    def get_previous_storage(self):
+        raise NotImplementedError()
+
+
+class SnapshotProfile(StorageProfile):
+    NAME = 'snapshot'
 
     def get_current_storage(self):
         now = time.time()
